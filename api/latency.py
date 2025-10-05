@@ -1,13 +1,14 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from pathlib import Path
 import pandas as pd
 from typing import List, Dict
 import numpy as np
+import json
 
 app = FastAPI()
 
-# Enable CORS for POST requests from any origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,33 +16,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load telemetry data CSV at startup
-data_path = "q-vercel-latency.json"  # Assuming you convert JSON to CSV, or load JSON directly with Pandas
-# We'll parse JSON content to DataFrame at startup for example's sake:
-import json
+data_path = Path(__file__).parent.parent / "q-vercel-latency.json"
+
 with open(data_path) as f:
     json_data = json.load(f)
-# Convert JSON list to DataFrame (assuming json_data is a list of dicts)
+
 df = pd.DataFrame(json_data)
-
-# Rename columns or normalize keys if needed, e.g. lower-cased, e.g., 'region', 'latencyms', 'uptimepct'
-
+df.columns = df.columns.str.strip().str.lower()  # normalize column names
 
 class MetricsRequest(BaseModel):
     regions: List[str]
     threshold_ms: int
 
-@app.post("/latency-metrics")
+@app.post("/api/latency")
 async def latency_metrics(req: MetricsRequest):
-    # Filter data by requested regions
     filtered = df[df["region"].str.lower().isin([r.lower() for r in req.regions])]
 
     results: Dict[str, Dict[str, float]] = {}
-
     for region in req.regions:
         region_data = filtered[filtered["region"].str.lower() == region.lower()]
-
-        # Defensive in case no data for region
         if region_data.empty:
             results[region] = {
                 "avg_latency": 0.0,
@@ -51,11 +44,11 @@ async def latency_metrics(req: MetricsRequest):
             }
             continue
 
-        latencies = region_data["latencyms"]
-
+        # Use correct keys from your JSON data (all lowercase)
+        latencies = region_data["latency_ms"]
         avg_latency = latencies.mean()
         p95_latency = np.percentile(latencies, 95)
-        avg_uptime = region_data["uptimepct"].mean()
+        avg_uptime = region_data["uptime_pct"].mean()
         breaches = (latencies > req.threshold_ms).sum()
 
         results[region] = {
