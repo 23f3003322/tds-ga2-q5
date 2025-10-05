@@ -58,4 +58,4 @@ async def latency_metrics(req: MetricsRequest):
             "breaches": int(breaches),
         }
 
-    return results
+    return {"regions": results}
