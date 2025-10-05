@@ -9,20 +9,21 @@ import json
 
 app = FastAPI()
 
+# Enable CORS for all origins, all methods, all headers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # Allows requests from any origin
-    allow_methods=["*"],       # Allows POST requests
-    allow_headers=["*"],          # Allows all headers
+    allow_origins=["*"],   # Allow all origins
+    allow_methods=["*"],   # Allow all methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],  
+    expose_headers=["*"]    # Allow all headers
 )
 
+# Load your telemetry data JSON file (adjust path if needed)
 data_path = Path(__file__).parent.parent / "q-vercel-latency.json"
-
 with open(data_path) as f:
     json_data = json.load(f)
-
 df = pd.DataFrame(json_data)
-df.columns = df.columns.str.strip().str.lower()  # normalize column names
+df.columns = df.columns.str.strip().str.lower()
 
 class MetricsRequest(BaseModel):
     regions: List[str]
@@ -44,7 +45,6 @@ async def latency_metrics(req: MetricsRequest):
             }
             continue
 
-        # Use correct keys from your JSON data (all lowercase)
         latencies = region_data["latency_ms"]
         avg_latency = latencies.mean()
         p95_latency = np.percentile(latencies, 95)
